@@ -124,7 +124,7 @@ final class ProbeConfig {
 
         FrozenPistonProbe.LOGGER.info(
                 "Push decision: block={} direction={} mode={} result={}",
-                state.getBlock().builtInRegistryHolder().key().location(),
+                state.getBlock().builtInRegistryHolder().key().identifier(),
                 direction,
                 mode.name().toLowerCase(Locale.ROOT),
                 result
