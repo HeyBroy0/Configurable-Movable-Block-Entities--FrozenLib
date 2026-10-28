@@ -4,7 +4,9 @@
   "version": "${version}",
   "name": "Frozen Piston Probe",
   "description": "A small test mod for evaluating FrozenLib piston block-entity movement and lifecycle handling.",
-  "authors": ["HeyBroy0"],
+  "authors": [
+    "HeyBroy0"
+  ],
   "license": "All Rights Reserved",
   "environment": "*",
   "entrypoints": {
@@ -18,5 +20,8 @@
     "java": ">=25",
     "fabric-api": "*",
     "frozenlib": "*"
-  }
+  },
+  "mixins": [
+    "frozen_piston_probe.mixins.json"
+  ]
 }

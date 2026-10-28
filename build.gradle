@@ -24,7 +24,11 @@ dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    implementation "maven.modrinth:frozenlib:${project.frozenlib_version}"
+    implementation "maven.modrinth:${project.frozenlib_project_id}:${project.frozenlib_version_id}"
+
+    // Compile against MixinExtras; supported Fabric Loader versions provide it at runtime.
+    compileOnly "io.github.llamalad7:mixinextras-fabric:${project.mixinextras_version}"
+    annotationProcessor "io.github.llamalad7:mixinextras-fabric:${project.mixinextras_version}"
 }
 
 processResources {
