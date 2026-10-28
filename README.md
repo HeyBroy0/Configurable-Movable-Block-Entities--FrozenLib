@@ -141,3 +141,8 @@ The 0.1.3 experiment could crash when a moving-piston block entity had no captur
 ## 0.1.5 source-position tick capture correction
 
 In 0.1.4, the capture hook ran when a `MOVING_PISTON` placeholder was installed. Vanilla piston movement clears the real source positions to air first using `Block.UPDATE_MOVE_BY_PISTON`, and writes destination placeholders afterward; the placeholder's old state is commonly air, so that hook could miss the moved block's scheduled expiry. This revision captures matching ticks from the source-clear operation and associates them with the moving entity at `destination - movementDirection`. It skips source-piston entities so the piston-head/base placeholder cannot take an adjacent block's tick payload. The reported stuck states use scheduled block ticks in vanilla, so this is the first targeted correction to validate. Build and test before relying on it; ticks already collected into the level scheduler's current-tick work list remain outside this experiment's capture path.
+
+
+## 0.1.6 capture-before-mutation correction
+
+The 0.1.5 source-capture hook only observed source positions when vanilla wrote air with `UPDATE_MOVE_BY_PISTON`. For ordinary piston chains, most moved source positions are overwritten by a different moving-piston placeholder, so the hook did not capture those blocks' ticks. This revision wraps the first `PistonStructureResolver.getToPush()` call in `PistonBaseBlock.moveBlocks` and captures matching scheduled ticks from every resolved source position before any positions are changed. The old source-clear Mixin was removed. Build and test this revision before relying on it; the experiment still cannot capture ticks that the level scheduler has already collected into its current-tick work list.

@@ -69,7 +69,25 @@ public final class PistonTickTransfer {
         }
     }
 
-    /** Called before a piston-moved source block is cleared to air. */
+    /**
+     * Capture ticks for the entire resolved push list before vanilla starts replacing any of its
+     * positions. This is essential for a chain: most source positions are overwritten by another
+     * moving-piston placeholder rather than being set to air, so a source-clear-only hook misses them.
+     */
+    public static void captureMovingSources(Level level, List<BlockPos> sourcePositions) {
+        if (level.isClientSide()) {
+            return;
+        }
+
+        FrozenPistonProbe.LOGGER.info(
+                "Scanning {} resolved piston source positions for scheduled ticks", sourcePositions.size());
+        for (BlockPos pos : sourcePositions) {
+            LevelChunk chunk = level.getChunkAt(pos);
+            captureSource(chunk, pos, level.getBlockState(pos));
+        }
+    }
+
+    /** Called while the original block state and its per-chunk tick entries are still present. */
     public static void captureSource(LevelChunk chunk, BlockPos pos, net.minecraft.world.level.block.state.BlockState oldState) {
         Level level = chunk.getLevel();
         if (level.isClientSide() || oldState.isAir() || oldState.is(Blocks.MOVING_PISTON)) {
