@@ -19,9 +19,9 @@ A deliberately small Minecraft 26.3 Fabric test mod to evaluate FrozenLib's pist
 - Dispenser
 - Crafter
 - Chiseled bookshelf
-- Shelf
+- All vanilla wooden shelf variants (oak, spruce, birch, jungle, acacia, dark oak, mangrove, cherry, pale oak, bamboo, crimson, warped, and poplar)
 
-The inventory/data controls help separate a general block-entity transfer problem from lifecycle bugs specific to sculk or lecterns. Crafter, chiseled bookshelf, and shelf are added movement tests even though their contents are not all timer-driven.
+The inventory/data controls help separate a general block-entity transfer problem from lifecycle bugs specific to sculk or lecterns. Crafter, chiseled bookshelf, and the wooden shelf variants are added movement tests even though their contents are not all timer-driven.
 
 ### Vanilla scheduled-state baselines
 
@@ -90,7 +90,7 @@ Changes require a game/server restart. Invalid values are logged and replaced by
 3. For sensors, test normal and calibrated activation before and after movement. Confirm it can hear later vibrations, deactivate correctly, and continue producing expected redstone output.
 4. For the shrieker, test before and after movement. The probe now adds the block-entity-side-effect skip flag only to the landing `setBlock` operation when FrozenLib's moving piston contains saved carried-block-entity NBT. Look for the debug message `Preserving carried block entity during piston landing`. If the crash is gone, still verify shrieker activation and vibration behavior; avoiding the exception does not prove the whole lifecycle is correct.
 5. Restart with one target at `deny` to confirm policy enforcement. Then set it to `pass` to inspect the FrozenLib tag fallback path.
-6. Test the chest, dispenser, crafter, chiseled bookshelf, and shelf as block-entity controls. Move the lamp, target, observer, button, pressure plate, and torch as vanilla scheduled-state baselines.
+6. Test the chest, dispenser, crafter, chiseled bookshelf, and the wooden shelf variants as block-entity controls. Move the lamp, target, observer, button, pressure plate, and torch as vanilla scheduled-state baselines.
 7. Repeat with destination positions across a chunk boundary, then save/reload while a block is moving if possible. Test single-block moves separately from slime/honey-chain pushes.
 
 ## Interpreting logs
@@ -125,7 +125,7 @@ The capture operates on the pending per-chunk queues. A tick already collected b
 ### Added test blocks
 
 - State-expiry targets: sculk sensor, calibrated sculk sensor, sculk shrieker, lectern.
-- Block-entity controls: chest, trapped chest, dispenser, crafter, chiseled bookshelf, shelf.
+- Block-entity controls: chest, trapped chest, dispenser, crafter, chiseled bookshelf, wooden shelf variants.
 - Vanilla behavior baselines: grindstone, redstone lamp, target, observer, stone button, stone pressure plate, redstone torch. The baseline blocks are logged by the moving-block callback but are not controlled by the block-entity push policy.
 
 ### Testing schedule restoration

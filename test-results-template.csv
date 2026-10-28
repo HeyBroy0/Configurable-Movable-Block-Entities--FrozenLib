@@ -19,8 +19,6 @@ minecraft:crafter,added-block-entity-control,allow,extension,,,,,,Check block en
 minecraft:crafter,added-block-entity-control,allow,retraction,,,,,,Check block entity data preservation and ordinary operation.
 minecraft:chiseled_bookshelf,added-block-entity-control,allow,extension,,,,,,Check block entity data preservation and ordinary operation.
 minecraft:chiseled_bookshelf,added-block-entity-control,allow,retraction,,,,,,Check block entity data preservation and ordinary operation.
-minecraft:shelf,added-block-entity-control,allow,extension,,,,,,Check block entity data preservation and ordinary operation.
-minecraft:shelf,added-block-entity-control,allow,retraction,,,,,,Check block entity data preservation and ordinary operation.
 minecraft:grindstone,vanilla-baseline,n/a,extension,,,,,,Compare vanilla scheduled state expiry; redstone lamp is a no-regression control.
 minecraft:grindstone,vanilla-baseline,n/a,retraction,,,,,,Compare vanilla scheduled state expiry; redstone lamp is a no-regression control.
 minecraft:redstone_lamp,vanilla-baseline,n/a,extension,,,,,,Compare vanilla scheduled state expiry; redstone lamp is a no-regression control.
@@ -41,3 +39,29 @@ minecraft:sculk_shrieker,cross-chunk,allow,extension,,,,,,Move across chunk boun
 minecraft:lectern,cross-chunk,allow,extension,,,,,,Move across chunk boundary; verify original expiry timing and no dropped or duplicated tick.
 minecraft:redstone_lamp,cross-chunk,n/a,extension,,,,,,Move across chunk boundary; verify original expiry timing and no dropped or duplicated tick.
 other-type-at-source-position,scheduler-filter,n/a,extension,,,,,,Ensure a scheduled tick whose type differs from the source block state does not transfer.
+minecraft:oak_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:oak_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:spruce_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:spruce_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:birch_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:birch_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:jungle_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:jungle_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:acacia_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:acacia_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:dark_oak_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:dark_oak_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:mangrove_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:mangrove_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:cherry_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:cherry_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:pale_oak_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:pale_oak_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:bamboo_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:bamboo_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:crimson_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:crimson_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:warped_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:warped_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:poplar_shelf,added-block-entity-control,allow,extension,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
+minecraft:poplar_shelf,added-block-entity-control,allow,retraction,,,,,,Check shelf block entity inventory/data preservation and powered-connection behavior.
