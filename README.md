@@ -146,3 +146,10 @@ In 0.1.4, the capture hook ran when a `MOVING_PISTON` placeholder was installed.
 ## 0.1.6 capture-before-mutation correction
 
 The 0.1.5 source-capture hook only observed source positions when vanilla wrote air with `UPDATE_MOVE_BY_PISTON`. For ordinary piston chains, most moved source positions are overwritten by a different moving-piston placeholder, so the hook did not capture those blocks' ticks. This revision wraps the first `PistonStructureResolver.getToPush()` call in `PistonBaseBlock.moveBlocks` and captures matching scheduled ticks from every resolved source position before any positions are changed. The old source-clear Mixin was removed. Build and test this revision before relying on it; the experiment still cannot capture ticks that the level scheduler has already collected into its current-tick work list.
+
+
+## 0.1.7 fast-finalTick landing guard
+
+The 0.1.6 crash report showed the shrieker failing during `PistonMovingBlockEntity.finalTick`, reached through a block event. That path lands via `Level.setBlockAndUpdate`, not the earlier `tick` method's wrapped `Level.setBlock`, so it did not receive the skip-side-effects flag. The existing `LevelChunkSetBlockStateMixin` is now repurposed to add `UPDATE_SKIP_BLOCK_ENTITY_SIDEEFFECTS` only when the old state is `minecraft:moving_piston` and the new state has a block entity. This covers the immediate finalTick path without changing ordinary block placements/removals.
+
+The 0.1.6 branch configuration also omitted `PistonBaseBlockMixin` from `frozen_piston_probe.mixins.json`, so the resolver-time scheduled-tick capture code was not active. This version registers that Mixin. Finally, the old source-clear capture is removed: the resolver hook captures the push list before positions mutate, and the later empty capture could erase the earlier payload. Build and test this revision before relying on it.
