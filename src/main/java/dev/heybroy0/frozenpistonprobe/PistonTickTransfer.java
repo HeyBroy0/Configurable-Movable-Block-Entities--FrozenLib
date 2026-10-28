@@ -56,8 +56,12 @@ public final class PistonTickTransfer {
 
     public record Payload(List<BlockTick> blockTicks, List<FluidTick> fluidTicks) {
         public Payload {
-            blockTicks = List.copyOf(blockTicks);
-            fluidTicks = List.copyOf(fluidTicks);
+            // Mixin-added fields can be null on moving-piston instances that never received
+            // a captured payload (for example, ordinary blocks with no pending scheduled ticks).
+            // Treat an absent collection as an empty payload rather than crashing during landing
+            // or while Minecraft is generating a block-entity save/crash report.
+            blockTicks = blockTicks == null ? List.of() : List.copyOf(blockTicks);
+            fluidTicks = fluidTicks == null ? List.of() : List.copyOf(fluidTicks);
         }
 
         public boolean isEmpty() {
@@ -174,7 +178,7 @@ public final class PistonTickTransfer {
         }
 
         Payload payload = access.frozenPistonProbe$getTickPayload();
-        if (payload.isEmpty()) {
+        if (payload == null || payload.isEmpty()) {
             return;
         }
 

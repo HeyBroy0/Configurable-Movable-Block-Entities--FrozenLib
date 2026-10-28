@@ -34,9 +34,26 @@ public abstract class PistonMovingBlockEntityMixin implements PistonTickTransfer
     @Unique
     private List<PistonTickTransfer.FluidTick> frozenPistonProbe$fluidTicks = List.of();
 
+    @Inject(method = "<init>*", at = @At("RETURN"))
+    private void frozenPistonProbe$initializeTickPayload(CallbackInfo ci) {
+        // Explicitly initialize our injected fields after each constructor. The null checks in
+        // accessors and saveAdditional remain as a defensive fallback for preexisting instances.
+        if (this.frozenPistonProbe$blockTicks == null) {
+            this.frozenPistonProbe$blockTicks = List.of();
+        }
+        if (this.frozenPistonProbe$fluidTicks == null) {
+            this.frozenPistonProbe$fluidTicks = List.of();
+        }
+    }
+
     @Unique
     @Override
     public void frozenPistonProbe$setTickPayload(PistonTickTransfer.Payload payload) {
+        if (payload == null) {
+            this.frozenPistonProbe$blockTicks = List.of();
+            this.frozenPistonProbe$fluidTicks = List.of();
+            return;
+        }
         this.frozenPistonProbe$blockTicks = List.copyOf(payload.blockTicks());
         this.frozenPistonProbe$fluidTicks = List.copyOf(payload.fluidTicks());
     }
@@ -44,6 +61,8 @@ public abstract class PistonMovingBlockEntityMixin implements PistonTickTransfer
     @Unique
     @Override
     public PistonTickTransfer.Payload frozenPistonProbe$getTickPayload() {
+        // Do not assume injected field initializers ran for every constructor/loading path.
+        // Payload normalizes absent lists to empty immutable lists.
         return new PistonTickTransfer.Payload(this.frozenPistonProbe$blockTicks, this.frozenPistonProbe$fluidTicks);
     }
 
@@ -119,11 +138,11 @@ public abstract class PistonMovingBlockEntityMixin implements PistonTickTransfer
 
     @Inject(method = "saveAdditional", at = @At("TAIL"))
     private void frozenPistonProbe$saveCarriedTicks(ValueOutput output, CallbackInfo ci) {
-        if (!this.frozenPistonProbe$blockTicks.isEmpty()) {
+        if (this.frozenPistonProbe$blockTicks != null && !this.frozenPistonProbe$blockTicks.isEmpty()) {
             output.store(PistonTickTransfer.blockTicksKey(), PistonTickTransfer.BLOCK_TICK_CODEC.listOf(),
                     this.frozenPistonProbe$blockTicks);
         }
-        if (!this.frozenPistonProbe$fluidTicks.isEmpty()) {
+        if (this.frozenPistonProbe$fluidTicks != null && !this.frozenPistonProbe$fluidTicks.isEmpty()) {
             output.store(PistonTickTransfer.fluidTicksKey(), PistonTickTransfer.FLUID_TICK_CODEC.listOf(),
                     this.frozenPistonProbe$fluidTicks);
         }

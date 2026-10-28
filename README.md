@@ -131,3 +131,8 @@ The capture operates on the pending per-chunk queues. A tick already collected b
 ### Testing schedule restoration
 
 Test both piston extension and sticky retraction. For timers, begin movement shortly after the block schedules its expiry, then confirm it expires after approximately the remaining delay rather than becoming stuck or resetting to a full delay. Repeat with a destination across a chunk boundary and save/reload while the block is moving if possible. Also test a scheduled tick for another type at the source coordinates; the probe should not attach that unrelated tick to the moved block.
+
+
+## 0.1.4 null-payload hardening
+
+The 0.1.3 experiment could crash when a moving-piston block entity had no captured scheduled ticks: the Mixin-added tick lists were null for that instance, and constructing a payload called `List.copyOf(null)`. This revision treats absent tick lists as empty and guards serialization, so moving an ordinary block without captured timers does not fail simply because no payload was attached. Scheduled-tick transfer behavior is otherwise unchanged. This is a crash fix based on the reported stack trace; it still requires a CI build and in-game verification.
