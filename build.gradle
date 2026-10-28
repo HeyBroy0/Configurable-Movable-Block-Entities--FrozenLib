@@ -22,9 +22,9 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    Implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    Implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    Implementation "maven.modrinth:frozenlib:${project.frozenlib_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation "maven.modrinth:frozenlib:${project.frozenlib_version}"
 }
 
 processResources {
