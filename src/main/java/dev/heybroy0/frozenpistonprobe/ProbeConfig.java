@@ -54,6 +54,9 @@ final class ProbeConfig {
         add("chest", Blocks.CHEST, "allow");
         add("trapped_chest", Blocks.TRAPPED_CHEST, "allow");
         add("dispenser", Blocks.DISPENSER, "allow");
+        add("crafter", Blocks.CRAFTER, "allow");
+        add("chiseled_bookshelf", Blocks.CHISELED_BOOKSHELF, "allow");
+        add("shelf", Blocks.SHELF, "allow");
     }
 
     private ProbeConfig() {

@@ -8,6 +8,9 @@
     "minecraft:lectern",
     "minecraft:chest",
     "minecraft:trapped_chest",
-    "minecraft:dispenser"
+    "minecraft:dispenser",
+    "minecraft:crafter",
+    "minecraft:chiseled_bookshelf",
+    "minecraft:shelf"
   ]
 }

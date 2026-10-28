@@ -12,20 +12,36 @@ A deliberately small Minecraft 26.3 Fabric test mod to evaluate FrozenLib's pist
 - Sculk catalyst
 - Lectern
 
-### Positive controls
+### Block-entity controls
 
 - Chest
 - Trapped chest
 - Dispenser
+- Crafter
+- Chiseled bookshelf
+- Shelf
 
-The controls help separate a general block-entity transfer problem from lifecycle bugs specific to sculk or lecterns. A grindstone is logged as a vanilla baseline; it has no block entity and is therefore not controlled by FrozenLib's block-entity push event.
+The inventory/data controls help separate a general block-entity transfer problem from lifecycle bugs specific to sculk or lecterns. Crafter, chiseled bookshelf, and shelf are added movement tests even though their contents are not all timer-driven.
+
+### Vanilla scheduled-state baselines
+
+- Grindstone (no block entity)
+- Redstone lamp
+- Target block
+- Observer
+- Stone button
+- Stone pressure plate
+- Redstone torch
+
+These blocks do not use the block-entity push policy. They are included to compare ordinary piston state transitions and scheduled tick expiry.
 
 ## How the prototype is wired
 
 - Uses `PistonEvents.DETERMINE_BLOCK_ENTITY_PUSH_RESULT` to apply each configured block's movement policy.
 - Uses `PistonEvents.ON_MOVING_BLOCK_SET` to log the block, destination position, and whether a block entity is present when FrozenLib reports its moving-block set path.
 - Adds the test blocks to `frozenlib:has_pushable_block_entity`. This tag is important: FrozenLib's piston mixin uses it when deciding whether to skip normal block-entity removal side effects, and its fallback pushability logic also consults the tag. The tag is merged with `replace: false` so other mods' entries are not intentionally replaced.
-- Adds a generic landing-path compatibility Mixin. If FrozenLib's moving piston has saved carried block-entity NBT, the probe ORs `PistonBaseBlock.UPDATE_SKIP_BLOCK_ENTITY_SIDEEFFECTS` into the landing `Level.setBlock` flags. FrozenLib remains responsible for restoring the block entity from its saved NBT and firing `ON_MOVING_BLOCK_SET`. This tests a lifecycle-level fix instead of special-casing the shrieker's `shrieking` property.
+- Adds a generic landing-path compatibility Mixin. If FrozenLib's moving piston has saved carried block-entity NBT, the probe ORs `PistonBaseBlock.UPDATE_SKIP_BLOCK_ENTITY_SIDEEFFECTS` into the landing `Level.setBlock` flags. FrozenLib remains responsible for restoring the block entity from its saved NBT and firing `ON_MOVING_BLOCK_SET`.
+- Captures pending block and fluid ticks from the source chunk only when the scheduled type matches the moved block or its current fluid state. It stores those tick appointments on the moving-piston block entity and queues them at the destination before placement, preserving the absolute expiry time, priority, and sub-tick ordering. Pre-queuing is intentional: a landing neighbor update may try to schedule a fresh full-delay tick, and the scheduler deduplicates ticks by type and position.
 
 ## Build
 
@@ -60,6 +76,9 @@ lectern=allow
 chest=allow
 trapped_chest=allow
 dispenser=allow
+crafter=allow
+chiseled_bookshelf=allow
+shelf=allow
 ```
 
 Changes require a game/server restart. Invalid values are logged and replaced by the defaults.
@@ -71,8 +90,8 @@ Changes require a game/server restart. Invalid values are logged and replaced by
 3. For sensors, test normal and calibrated activation before and after movement. Confirm it can hear later vibrations, deactivate correctly, and continue producing expected redstone output.
 4. For the shrieker, test before and after movement. The probe now adds the block-entity-side-effect skip flag only to the landing `setBlock` operation when FrozenLib's moving piston contains saved carried-block-entity NBT. Look for the debug message `Preserving carried block entity during piston landing`. If the crash is gone, still verify shrieker activation and vibration behavior; avoiding the exception does not prove the whole lifecycle is correct.
 5. Restart with one target at `deny` to confirm policy enforcement. Then set it to `pass` to inspect the FrozenLib tag fallback path.
-6. Test a chest and dispenser as data-persistence controls; move a grindstone as the vanilla baseline.
-7. Repeat after saving, exiting, and reloading the world. If feasible, also test a slime/honey-chain push separately from a single-block push.
+6. Test the chest, dispenser, crafter, chiseled bookshelf, and shelf as block-entity controls. Move the lamp, target, observer, button, pressure plate, and torch as vanilla scheduled-state baselines.
+7. Repeat with destination positions across a chunk boundary, then save/reload while a block is moving if possible. Test single-block moves separately from slime/honey-chain pushes.
 
 ## Interpreting logs
 
@@ -93,3 +112,22 @@ The reported crash occurred before FrozenLib's `ON_MOVING_BLOCK_SET` callback: M
 ### Minecraft 26.3 compatibility note
 
 The probe uses `ResourceKey.identifier()` for block registry keys, matching the Minecraft 26.3 API. This revision uses MixinExtras to wrap the piston landing call; supported Fabric Loader versions supply MixinExtras at runtime.
+
+
+## 0.1.3 scheduled-tick transfer experiment
+
+This experiment captures pending **block ticks whose type matches the block at the source position** and pending **fluid ticks whose type matches the source fluid state** immediately before a position is replaced with the moving-piston placeholder. Captured ticks are attached to the moving piston block entity, saved with it, and queued at the landing position with their original absolute trigger time, priority, and sub-tick order. As game time continues during motion, a tick that becomes overdue executes promptly after the moved block lands.
+
+Ticks for other types at the same coordinates are intentionally not transferred. Vanilla scheduled ticks name a type and a position, and Minecraft validates the type when the tick runs. A tick for a different block at the source position is not part of the moved block's timer.
+
+The capture operates on the pending per-chunk queues. A tick already collected by the level scheduler for the current tick may be outside those queues; this first probe does not try to migrate an in-flight tick. Cross-chunk scheduling is delegated to the level scheduler rather than writing directly into the destination chunk's queue. A tick whose type differs from the source block is deliberately left behind, where vanilla's scheduled-tick type check will discard it if that type is no longer present.
+
+### Added test blocks
+
+- State-expiry targets: sculk sensor, calibrated sculk sensor, sculk shrieker, lectern.
+- Block-entity controls: chest, trapped chest, dispenser, crafter, chiseled bookshelf, shelf.
+- Vanilla behavior baselines: grindstone, redstone lamp, target, observer, stone button, stone pressure plate, redstone torch. The baseline blocks are logged by the moving-block callback but are not controlled by the block-entity push policy.
+
+### Testing schedule restoration
+
+Test both piston extension and sticky retraction. For timers, begin movement shortly after the block schedules its expiry, then confirm it expires after approximately the remaining delay rather than becoming stuck or resetting to a full delay. Repeat with a destination across a chunk boundary and save/reload while the block is moving if possible. Also test a scheduled tick for another type at the source coordinates; the probe should not attach that unrelated tick to the moved block.

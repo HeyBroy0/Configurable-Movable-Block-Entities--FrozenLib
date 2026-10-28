@@ -4,6 +4,8 @@
   "package": "dev.heybroy0.frozenpistonprobe.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "LevelChunkSetBlockStateMixin",
+    "LevelSetBlockEntityMixin",
     "PistonMovingBlockEntityMixin"
   ],
   "injectors": {
