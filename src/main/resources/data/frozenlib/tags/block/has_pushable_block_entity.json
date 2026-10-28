@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:sculk_sensor",
+    "minecraft:calibrated_sculk_sensor",
+    "minecraft:sculk_shrieker",
+    "minecraft:sculk_catalyst",
+    "minecraft:lectern",
+    "minecraft:chest",
+    "minecraft:trapped_chest",
+    "minecraft:dispenser"
+  ]
+}

@@ -1,0 +1,3 @@
+Prototype project. No license grant is made for redistribution at this stage.
+FrozenLib is a separate dependency distributed under GPL-3.0-only; see https://modrinth.com/mod/frozenlib.
+Review licensing requirements before redistributing this prototype or a combined modpack.

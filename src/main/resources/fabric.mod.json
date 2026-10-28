@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "frozen_piston_probe",
+  "version": "${version}",
+  "name": "Frozen Piston Probe",
+  "description": "A small test mod for evaluating FrozenLib piston block-entity movement and lifecycle handling.",
+  "authors": ["HeyBroy0"],
+  "license": "All Rights Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.heybroy0.frozenpistonprobe.FrozenPistonProbe"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*",
+    "frozenlib": "*"
+  }
+}
