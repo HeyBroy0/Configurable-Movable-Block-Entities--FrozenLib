@@ -69,7 +69,7 @@ public final class PistonTickTransfer {
         }
     }
 
-    /** Called before a chunk replaces the source state with the moving-piston placeholder. */
+    /** Called before a piston-moved source block is cleared to air. */
     public static void captureSource(LevelChunk chunk, BlockPos pos, net.minecraft.world.level.block.state.BlockState oldState) {
         Level level = chunk.getLevel();
         if (level.isClientSide() || oldState.isAir() || oldState.is(Blocks.MOVING_PISTON)) {
@@ -137,20 +137,28 @@ public final class PistonTickTransfer {
         return matches;
     }
 
-    /** Called when FrozenLib's moving-piston block entity is installed at the source position. */
+    /** Called when FrozenLib installs the moving-piston entity that carries a captured source block. */
     public static void attachCaptured(Level level, net.minecraft.world.level.block.entity.BlockEntity blockEntity) {
         if (level.isClientSide() || !(blockEntity instanceof net.minecraft.world.level.block.piston.PistonMovingBlockEntity movingEntity)
                 || !(movingEntity instanceof PistonTickTransferAccess access)) {
             return;
         }
 
+        // The piston head/base placeholder is not a carried ordinary block and must not consume
+        // a neighbouring block's saved ticks.
+        if (movingEntity.isSourcePiston()) {
+            return;
+        }
+
+        BlockPos destinationPos = movingEntity.getBlockPos();
+        BlockPos sourcePos = destinationPos.relative(movingEntity.getMovementDirection().getOpposite()).immutable();
         Payload payload;
         synchronized (CAPTURED_BEFORE_MOVING_ENTITY) {
             Map<BlockPos, Payload> levelCaptures = CAPTURED_BEFORE_MOVING_ENTITY.get(level);
             if (levelCaptures == null) {
                 return;
             }
-            payload = levelCaptures.remove(movingEntity.getBlockPos());
+            payload = levelCaptures.remove(sourcePos);
             if (levelCaptures.isEmpty()) {
                 CAPTURED_BEFORE_MOVING_ENTITY.remove(level);
             }
@@ -159,8 +167,8 @@ public final class PistonTickTransfer {
         if (payload != null && !payload.isEmpty()) {
             access.frozenPistonProbe$setTickPayload(payload);
             FrozenPistonProbe.LOGGER.info(
-                    "Attached scheduled ticks to moving piston at {}: block={}, fluid={}",
-                    movingEntity.getBlockPos(), payload.blockTicks().size(), payload.fluidTicks().size());
+                    "Attached scheduled ticks from source {} to moving piston at {}: block={}, fluid={}",
+                    sourcePos, destinationPos, payload.blockTicks().size(), payload.fluidTicks().size());
         }
     }
 
