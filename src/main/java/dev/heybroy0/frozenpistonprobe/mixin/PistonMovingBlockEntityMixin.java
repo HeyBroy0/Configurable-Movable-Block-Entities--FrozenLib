@@ -5,10 +5,15 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.heybroy0.frozenpistonprobe.FrozenPistonProbe;
 import dev.heybroy0.frozenpistonprobe.PistonTickTransfer;
+import dev.heybroy0.frozenpistonprobe.ProbeConfig;
 import dev.heybroy0.frozenpistonprobe.PistonTickTransferAccess;
 import net.frozenblock.lib.block.impl.piston.PistonMovingBlockEntityInterface;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -101,6 +106,7 @@ public abstract class PistonMovingBlockEntityMixin implements PistonTickTransfer
             );
         }
 
+        frozenPistonProbe$stagePairedLanding(level, pos, state, movingEntity);
         PistonTickTransfer.prepareLanding(level, pos, state, movingEntity);
         boolean changed = original.call(level, pos, state, effectiveFlags);
         if (changed) {
@@ -119,12 +125,67 @@ public abstract class PistonMovingBlockEntityMixin implements PistonTickTransfer
     private boolean frozenPistonProbe$rescheduleTicksOnFinalTick(
             Level level, BlockPos pos, BlockState state, Operation<Boolean> original) {
         PistonMovingBlockEntity movingEntity = (PistonMovingBlockEntity) (Object) this;
+        frozenPistonProbe$stagePairedLanding(level, pos, state, movingEntity);
         PistonTickTransfer.prepareLanding(level, pos, state, movingEntity);
         boolean changed = original.call(level, pos, state);
         if (changed) {
             PistonTickTransfer.consumePayload(movingEntity);
         }
         return changed;
+    }
+
+
+    /**
+     * Bed and door halves finalize as two independent moving-piston block entities. Place the
+     * matching companion half with shape updates suppressed immediately before this half lands;
+     * this landing's normal neighbor update then sees a complete pair instead of deleting the
+     * first half as an orphan. This is intentionally limited to configured movable states without
+     * block entities, because this early placement does not perform FrozenLib's block-entity restore.
+     */
+    @Unique
+    private static void frozenPistonProbe$stagePairedLanding(
+            Level level, BlockPos pos, BlockState movedState, PistonMovingBlockEntity movingEntity) {
+        if (movedState.hasBlockEntity()
+                || (!movedState.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.BED_PART)
+                && !movedState.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF))) {
+            return;
+        }
+        String blockId = BuiltInRegistries.BLOCK.getKey(movedState.getBlock()).toString();
+        if (ProbeConfig.movementModeForId(blockId) != ProbeConfig.MovementMode.MOVABLE) {
+            return;
+        }
+
+        BlockPos companionPos = ProbeConfig.companionPosition(pos, movedState);
+        if (companionPos == null || !level.getBlockState(companionPos).is(Blocks.MOVING_PISTON)) {
+            return;
+        }
+        BlockEntity companionBlockEntity = level.getBlockEntity(companionPos);
+        if (!(companionBlockEntity instanceof PistonMovingBlockEntity companionMoving)
+                || companionMoving == movingEntity) {
+            return;
+        }
+
+        BlockState companionState = companionMoving.getMovedState();
+        if (companionState.getBlock() != movedState.getBlock() || companionState.hasBlockEntity()) {
+            return;
+        }
+        BlockPos reciprocal = ProbeConfig.companionPosition(companionPos, companionState);
+        if (!pos.equals(reciprocal)) {
+            return;
+        }
+
+        PistonTickTransfer.prepareLanding(level, companionPos, companionState, companionMoving);
+        boolean changed = level.setBlock(
+                companionPos,
+                companionState,
+                Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+        if (changed) {
+            PistonTickTransfer.consumePayload(companionMoving);
+            FrozenPistonProbe.LOGGER.info(
+                    "Staged paired multi-block landing: {} at {} before {} at {}",
+                    BuiltInRegistries.BLOCK.getKey(companionState.getBlock()), companionPos,
+                    BuiltInRegistries.BLOCK.getKey(movedState.getBlock()), pos);
+        }
     }
 
     @Inject(method = "loadAdditional", at = @At("TAIL"))

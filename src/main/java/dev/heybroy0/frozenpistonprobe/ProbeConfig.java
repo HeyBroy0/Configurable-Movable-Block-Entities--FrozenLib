@@ -2,12 +2,17 @@ package dev.heybroy0.frozenpistonprobe;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.frozenblock.lib.block.api.piston.PistonEvents;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.material.PushReaction;
 
 import java.io.IOException;
@@ -15,7 +20,11 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -65,46 +74,46 @@ public final class ProbeConfig {
     private static final String MOVEMENT_PREFIX = "movement.";
     private static final String TICK_PREFIX = "tick.";
 
-    // Keep the existing short keys working for the original block-entity test list.
-    private static final Map<String, String> DEFAULTS = new LinkedHashMap<>();
-    private static final Map<Block, String> KEYS_BY_BLOCK = new LinkedHashMap<>();
+    // This map now exists only to migrate older short-key properties such as
+    // "chest=movable". Active movement defaults live in the bundled properties file so
+    // the same values are visible and editable in the generated config.
+    private static final Map<Block, String> LEGACY_KEYS_BY_BLOCK = new LinkedHashMap<>();
     private static final Properties ACTIVE = new Properties();
 
     static {
-        add("sculk_sensor", Blocks.SCULK_SENSOR, "movable");
-        add("calibrated_sculk_sensor", Blocks.CALIBRATED_SCULK_SENSOR, "movable");
-        add("sculk_shrieker", Blocks.SCULK_SHRIEKER, "movable");
-        add("sculk_catalyst", Blocks.SCULK_CATALYST, "movable");
-        add("lectern", Blocks.LECTERN, "movable");
+        addLegacyKey("sculk_sensor", Blocks.SCULK_SENSOR);
+        addLegacyKey("calibrated_sculk_sensor", Blocks.CALIBRATED_SCULK_SENSOR);
+        addLegacyKey("sculk_shrieker", Blocks.SCULK_SHRIEKER);
+        addLegacyKey("sculk_catalyst", Blocks.SCULK_CATALYST);
+        addLegacyKey("lectern", Blocks.LECTERN);
 
         // Control block entities: useful for checking ordinary inventory/data persistence.
-        add("chest", Blocks.CHEST, "movable");
-        add("trapped_chest", Blocks.TRAPPED_CHEST, "movable");
-        add("dispenser", Blocks.DISPENSER, "movable");
-        add("crafter", Blocks.CRAFTER, "movable");
-        add("chiseled_bookshelf", Blocks.CHISELED_BOOKSHELF, "movable");
+        addLegacyKey("chest", Blocks.CHEST);
+        addLegacyKey("trapped_chest", Blocks.TRAPPED_CHEST);
+        addLegacyKey("dispenser", Blocks.DISPENSER);
+        addLegacyKey("crafter", Blocks.CRAFTER);
+        addLegacyKey("chiseled_bookshelf", Blocks.CHISELED_BOOKSHELF);
         // Shelves are registered per wood type; there is no generic Blocks.SHELF field.
-        add("shelf", Blocks.OAK_SHELF, "movable");
-        add("shelf", Blocks.SPRUCE_SHELF, "movable");
-        add("shelf", Blocks.BIRCH_SHELF, "movable");
-        add("shelf", Blocks.JUNGLE_SHELF, "movable");
-        add("shelf", Blocks.ACACIA_SHELF, "movable");
-        add("shelf", Blocks.DARK_OAK_SHELF, "movable");
-        add("shelf", Blocks.MANGROVE_SHELF, "movable");
-        add("shelf", Blocks.CHERRY_SHELF, "movable");
-        add("shelf", Blocks.PALE_OAK_SHELF, "movable");
-        add("shelf", Blocks.BAMBOO_SHELF, "movable");
-        add("shelf", Blocks.CRIMSON_SHELF, "movable");
-        add("shelf", Blocks.WARPED_SHELF, "movable");
-        add("shelf", Blocks.POPLAR_SHELF, "movable");
+        addLegacyKey("shelf", Blocks.OAK_SHELF);
+        addLegacyKey("shelf", Blocks.SPRUCE_SHELF);
+        addLegacyKey("shelf", Blocks.BIRCH_SHELF);
+        addLegacyKey("shelf", Blocks.JUNGLE_SHELF);
+        addLegacyKey("shelf", Blocks.ACACIA_SHELF);
+        addLegacyKey("shelf", Blocks.DARK_OAK_SHELF);
+        addLegacyKey("shelf", Blocks.MANGROVE_SHELF);
+        addLegacyKey("shelf", Blocks.CHERRY_SHELF);
+        addLegacyKey("shelf", Blocks.PALE_OAK_SHELF);
+        addLegacyKey("shelf", Blocks.BAMBOO_SHELF);
+        addLegacyKey("shelf", Blocks.CRIMSON_SHELF);
+        addLegacyKey("shelf", Blocks.WARPED_SHELF);
+        addLegacyKey("shelf", Blocks.POPLAR_SHELF);
     }
 
     private ProbeConfig() {
     }
 
-    private static void add(String key, Block block, String defaultMode) {
-        DEFAULTS.put(key, defaultMode);
-        KEYS_BY_BLOCK.put(block, key);
+    private static void addLegacyKey(String key, Block block) {
+        LEGACY_KEYS_BY_BLOCK.put(block, key);
     }
 
     public static Path configPath() {
@@ -112,6 +121,17 @@ public final class ProbeConfig {
     }
 
     public static synchronized void load() {
+        Properties bundledDefaults = new Properties();
+        try (Reader reader = new java.io.InputStreamReader(
+                java.util.Objects.requireNonNull(
+                        ProbeConfig.class.getResourceAsStream("/frozen-piston-probe-defaults.properties"),
+                        "Missing bundled default config"),
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            bundledDefaults.load(reader);
+        } catch (IOException | NullPointerException exception) {
+            FrozenPistonProbe.LOGGER.error("Could not read bundled defaults; starting with vanilla movement policies", exception);
+        }
+
         Properties fromDisk = new Properties();
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
@@ -121,25 +141,29 @@ public final class ProbeConfig {
                 }
             }
         } catch (IOException exception) {
-            FrozenPistonProbe.LOGGER.error("Could not read config {}; using defaults", CONFIG_PATH, exception);
+            FrozenPistonProbe.LOGGER.error("Could not read config {}; using bundled defaults", CONFIG_PATH, exception);
         }
 
         ACTIVE.clear();
-        for (Map.Entry<String, String> entry : DEFAULTS.entrySet()) {
-            String key = entry.getKey();
-            String rawValue = fromDisk.getProperty(key, entry.getValue()).trim().toLowerCase(Locale.ROOT);
-            try {
-                ACTIVE.setProperty(key, MovementMode.parse(rawValue).name().toLowerCase(Locale.ROOT));
-            } catch (IllegalArgumentException exception) {
-                FrozenPistonProbe.LOGGER.warn(
-                        "Invalid legacy movement mode '{}' for '{}'; using '{}'",
-                        rawValue, key, entry.getValue());
-                ACTIVE.setProperty(key, entry.getValue());
+        copyValidatedDefaults(bundledDefaults);
+
+        // Migrate the old hardcoded-list format (for example chest=movable) to explicit
+        // registry-ID keys. An explicit modern key always wins over its legacy alias.
+        for (Map.Entry<Block, String> entry : LEGACY_KEYS_BY_BLOCK.entrySet()) {
+            String legacyValue = fromDisk.getProperty(entry.getValue());
+            String currentKey = movementKey(entry.getKey());
+            if (legacyValue != null && !fromDisk.containsKey(currentKey)) {
+                try {
+                    ACTIVE.setProperty(currentKey, MovementMode.parse(legacyValue.trim()).name().toLowerCase(Locale.ROOT));
+                } catch (IllegalArgumentException exception) {
+                    FrozenPistonProbe.LOGGER.warn("Invalid legacy movement mode '{}' for '{}'; ignoring legacy value",
+                            legacyValue, entry.getValue());
+                }
             }
         }
 
-        // Dynamic entries use registry IDs, e.g. movement.minecraft:observer and
-        // tick.minecraft:observer. Properties.store escapes the colon when writing the file.
+        // Load all per-block settings from disk, normalizing values. Properties keeps the
+        // colons in registry IDs as part of the key once Java's escaping has been decoded.
         for (String property : fromDisk.stringPropertyNames()) {
             boolean movement = property.startsWith(MOVEMENT_PREFIX);
             boolean ticks = property.startsWith(TICK_PREFIX);
@@ -154,28 +178,114 @@ public final class ProbeConfig {
                     ACTIVE.setProperty(property, TickMode.parse(value).name().toLowerCase(Locale.ROOT));
                 }
             } catch (IllegalArgumentException exception) {
-                FrozenPistonProbe.LOGGER.warn("Invalid policy '{}' for '{}'; ignoring this entry", value, property);
+                FrozenPistonProbe.LOGGER.warn("Invalid policy '{}' for '{}'; using default if available", value, property);
             }
         }
+
         saveToDisk();
     }
 
-    /** FrozenLib callback for block entities; vanilla mode defers to FrozenLib's normal rules. */
+    private static void copyValidatedDefaults(Properties defaults) {
+        for (String property : defaults.stringPropertyNames()) {
+            String value = defaults.getProperty(property, "").trim().toLowerCase(Locale.ROOT);
+            try {
+                if (property.startsWith(MOVEMENT_PREFIX)) {
+                    ACTIVE.setProperty(property, MovementMode.parse(value).name().toLowerCase(Locale.ROOT));
+                } else if (property.startsWith(TICK_PREFIX)) {
+                    ACTIVE.setProperty(property, TickMode.parse(value).name().toLowerCase(Locale.ROOT));
+                }
+            } catch (IllegalArgumentException exception) {
+                FrozenPistonProbe.LOGGER.warn("Invalid bundled default '{}' for '{}'; ignoring it", value, property);
+            }
+        }
+    }
+
+    /** FrozenLib callback for block entities, honoring explicit per-block policies. */
     public static PistonEvents.PushResult decidePush(BlockState state, Direction direction) {
         Block block = state.getBlock();
         MovementMode mode = movementMode(block);
+        boolean explicitPolicy = hasExplicitMovementPolicy(block);
+        // PASS for blocks without a probe policy preserves other mods' FrozenLib callbacks.
+        // For an explicit "vanilla" policy, FAIL disables FrozenLib's tagged fallback: vanilla
+        // Minecraft does not carry block entities inside moving pistons.
+        if (!explicitPolicy) {
+            return PistonEvents.PushResult.PASS;
+        }
         PistonEvents.PushResult result = switch (mode) {
             case MOVABLE, BREAKABLE -> PistonEvents.PushResult.SUCCESS;
-            case IMMOVABLE -> PistonEvents.PushResult.FAIL;
-            case VANILLA -> PistonEvents.PushResult.PASS;
+            case IMMOVABLE, VANILLA -> PistonEvents.PushResult.FAIL;
         };
 
-        if (hasExplicitMovementPolicy(block)) {
+        if (explicitPolicy) {
             FrozenPistonProbe.LOGGER.info(
                     "Push decision: block={} direction={} mode={} result={}",
                     BuiltInRegistries.BLOCK.getKey(block), direction, mode.name().toLowerCase(Locale.ROOT), result);
         }
         return result;
+    }
+
+    /**
+     * Adds companion halves of configured movable multi-blocks to the source list before vanilla
+     * starts replacing positions. This lets doors, beds, and other two-part blocks travel as a pair
+     * instead of one half being removed by the neighbor update of the other.
+     */
+    public static List<BlockPos> includeMovableCompanions(
+            Level level, List<BlockPos> sourcePositions, Direction pushDirection) {
+        List<BlockPos> expanded = new ArrayList<>(sourcePositions);
+        Set<BlockPos> included = new HashSet<>(sourcePositions);
+
+        // Iterate over the original resolver list only. Companion positions should not trigger
+        // recursive expansion, and a valid pair shares one registered Block instance.
+        for (BlockPos pos : sourcePositions) {
+            BlockState state = level.getBlockState(pos);
+            if (movementMode(state.getBlock()) != MovementMode.MOVABLE) {
+                continue;
+            }
+
+            BlockPos companion = companionPosition(pos, state);
+            if (companion == null || included.contains(companion)) {
+                continue;
+            }
+
+            BlockState companionState = level.getBlockState(companion);
+            if (companionState.getBlock() != state.getBlock()) {
+                continue;
+            }
+
+            BlockPos stableCompanion = companion.immutable();
+            int sourceIndex = expanded.indexOf(pos);
+            int sourceProjection = pushProjection(pos, pushDirection);
+            int companionProjection = pushProjection(stableCompanion, pushDirection);
+            // moveBlocks processes the resolver list backwards. Insert the farther-ahead half
+            // after its partner so it lands/moves first, while retaining vanilla's ordering for
+            // unrelated source positions.
+            expanded.add(sourceIndex + (companionProjection > sourceProjection ? 1 : 0), stableCompanion);
+            included.add(stableCompanion);
+            FrozenPistonProbe.LOGGER.info(
+                    "Including multi-block companion in piston move: {} at {} with {}",
+                    BuiltInRegistries.BLOCK.getKey(state.getBlock()), pos, companion);
+        }
+        return expanded;
+    }
+
+    private static int pushProjection(BlockPos pos, Direction direction) {
+        return pos.getX() * direction.getStepX()
+                + pos.getY() * direction.getStepY()
+                + pos.getZ() * direction.getStepZ();
+    }
+
+    /** Returns the other half's position for a bed or two-block-high state, if applicable. */
+    public static BlockPos companionPosition(BlockPos pos, BlockState state) {
+        if (state.hasProperty(BlockStateProperties.BED_PART)) {
+            BedPart part = state.getValue(BlockStateProperties.BED_PART);
+            Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+            return pos.relative(part == BedPart.FOOT ? facing : facing.getOpposite());
+        }
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            DoubleBlockHalf half = state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
+            return half == DoubleBlockHalf.LOWER ? pos.above() : pos.below();
+        }
+        return null;
     }
 
     /**
@@ -203,9 +313,7 @@ public final class ProbeConfig {
     }
 
     public static boolean isTracked(Block block) {
-        return KEYS_BY_BLOCK.containsKey(block)
-                || ACTIVE.containsKey(movementKey(block))
-                || ACTIVE.containsKey(tickKey(block));
+        return ACTIVE.containsKey(movementKey(block)) || ACTIVE.containsKey(tickKey(block));
     }
 
     public static String modeName(Block block) {
@@ -224,8 +332,8 @@ public final class ProbeConfig {
                 // load() validates disk values; keep this fallback defensive for runtime edits.
             }
         }
-        // The observer default preserves the known-good behavior reported by the user.
-        return block == Blocks.OBSERVER ? TickMode.VANILLA : TickMode.TRANSFER;
+        // Per-block exceptions such as the observer live in the bundled/editable properties file.
+        return TickMode.TRANSFER;
     }
 
     public static MovementMode movementModeForId(String rawId) {
@@ -251,17 +359,13 @@ public final class ProbeConfig {
     }
 
     private static boolean hasExplicitMovementPolicy(Block block) {
-        return KEYS_BY_BLOCK.containsKey(block) || ACTIVE.containsKey(movementKey(block));
+        // Only loaded/configured registry-ID keys define active policy. The legacy map is for
+        // migration only and must not keep old hardcoded block lists active by itself.
+        return ACTIVE.containsKey(movementKey(block));
     }
 
     private static MovementMode movementMode(Block block) {
         String configured = ACTIVE.getProperty(movementKey(block));
-        if (configured == null) {
-            String legacyKey = KEYS_BY_BLOCK.get(block);
-            if (legacyKey != null) {
-                configured = ACTIVE.getProperty(legacyKey, DEFAULTS.get(legacyKey));
-            }
-        }
         if (configured == null) {
             return MovementMode.VANILLA;
         }
@@ -303,7 +407,7 @@ public final class ProbeConfig {
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
             try (Writer writer = Files.newBufferedWriter(CONFIG_PATH)) {
-                ACTIVE.store(writer, "Frozen Piston Probe policies. movement.<block-id>=vanilla|movable|breakable|immovable; tick.<block-id>=vanilla|transfer|duplicate. Changes apply immediately in this process.");
+                ACTIVE.store(writer, "Frozen Piston Probe policies. movement.<block-id>=vanilla|movable|breakable|immovable; tick.<block-id>=vanilla|transfer|duplicate. Changes apply immediately in this process. Defaults originate from the bundled properties file.");
             }
             return true;
         } catch (IOException exception) {

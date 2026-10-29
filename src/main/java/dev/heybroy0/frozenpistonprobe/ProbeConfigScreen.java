@@ -1,10 +1,17 @@
 package dev.heybroy0.frozenpistonprobe;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+
+import java.util.List;
+import java.util.Locale;
 
 /** Minimal, intentionally crude UI for live testing of per-block policies. */
 final class ProbeConfigScreen extends Screen {
@@ -14,7 +21,11 @@ final class ProbeConfigScreen extends Screen {
     private Button tickButton;
     private ProbeConfig.MovementMode movementMode = ProbeConfig.MovementMode.VANILLA;
     private ProbeConfig.TickMode tickMode = ProbeConfig.TickMode.TRANSFER;
-    private String status = "Enter a registry ID, then Load block.";
+    private String status = "Enter a block ID; press Tab to autocomplete.";
+    private int panelLeft;
+    private int panelWidth;
+    private List<String> completionCandidates = List.of();
+    private int completionIndex = -1;
 
     ProbeConfigScreen(Screen parent) {
         super(Component.literal("Frozen Piston Probe"));
@@ -23,30 +34,33 @@ final class ProbeConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        int width = Math.min(240, this.width - 20);
-        int left = (this.width - width) / 2;
+        this.panelWidth = Math.min(260, this.width - 20);
+        this.panelLeft = (this.width - this.panelWidth) / 2;
+
         this.blockId = this.addRenderableWidget(new EditBox(
-                this.font, left, 44, width, 20, Component.literal("Block ID")));
+                this.font, this.panelLeft, 41, this.panelWidth, 20, Component.literal("Block ID")));
         this.blockId.setMaxLength(256);
         this.blockId.setValue("minecraft:observer");
 
-        this.addRenderableWidget(Button.builder(Component.literal("Load block"), button -> loadBlock())
-                .bounds(left, 68, width, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Load settings"), button -> loadBlock())
+                .bounds(this.panelLeft, 73, this.panelWidth, 18).build());
 
         this.movementButton = this.addRenderableWidget(Button.builder(Component.literal("Movement: vanilla"), button -> {
             this.movementMode = this.movementMode.next();
             updateButtonLabels();
-        }).bounds(left, 94, width, 20).build());
+        }).bounds(this.panelLeft, 95, this.panelWidth, 18).build());
 
         this.tickButton = this.addRenderableWidget(Button.builder(Component.literal("Ticks: transfer"), button -> {
             this.tickMode = this.tickMode.next();
             updateButtonLabels();
-        }).bounds(left, 120, width, 20).build());
+        }).bounds(this.panelLeft, 117, this.panelWidth, 18).build());
 
         this.addRenderableWidget(Button.builder(Component.literal("Apply + Save"), button -> applyPolicies())
-                .bounds(left, 148, width, 20).build());
+                .bounds(this.panelLeft, 139, this.panelWidth, 18).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Open config file"), button -> openConfigFile())
+                .bounds(this.panelLeft, 161, this.panelWidth, 18).build());
         this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
-                .bounds(left, 174, width, 20).build());
+                .bounds(this.panelLeft, 183, this.panelWidth, 18).build());
 
         loadBlock();
         this.setInitialFocus(this.blockId);
@@ -60,7 +74,7 @@ final class ProbeConfigScreen extends Screen {
         }
         this.movementMode = ProbeConfig.movementModeForId(rawId);
         this.tickMode = ProbeConfig.tickModeForId(rawId);
-        this.status = "Loaded " + rawId;
+        this.status = "Loaded settings for " + rawId;
         updateButtonLabels();
     }
 
@@ -76,25 +90,98 @@ final class ProbeConfigScreen extends Screen {
                 : "Applied in memory; could not save file.";
     }
 
+    private void openConfigFile() {
+        try {
+            Util.getPlatform().openUri(ProbeConfig.configPath().toUri());
+            this.status = "Opened config file in your default editor.";
+        } catch (RuntimeException exception) {
+            FrozenPistonProbe.LOGGER.warn("Could not open config file {}", ProbeConfig.configPath(), exception);
+            this.status = "Could not open file. Config path is in latest.log.";
+        }
+    }
+
+    private List<String> findBlockSuggestions(String value) {
+        String typed = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        if (typed.isEmpty() || ProbeConfig.isValidBlockId(typed)) {
+            return List.of();
+        }
+
+        return BuiltInRegistries.BLOCK.keySet().stream()
+                .map(Identifier::toString)
+                .filter(id -> id.startsWith(typed)
+                        || (!typed.contains(":") && id.substring(id.indexOf(':') + 1).startsWith(typed)))
+                .sorted()
+                .limit(5)
+                .toList();
+    }
+
+    private List<String> blockSuggestions() {
+        String current = this.blockId == null ? "" : this.blockId.getValue().trim().toLowerCase(Locale.ROOT);
+        if (!this.completionCandidates.isEmpty() && this.completionCandidates.contains(current)) {
+            return this.completionCandidates;
+        }
+        return findBlockSuggestions(current);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == InputConstants.KEY_TAB && this.blockId != null && this.blockId.isFocused()) {
+            String current = this.blockId.getValue().trim().toLowerCase(Locale.ROOT);
+            if (this.completionCandidates.isEmpty() || !this.completionCandidates.contains(current)) {
+                this.completionCandidates = findBlockSuggestions(current);
+                this.completionIndex = -1;
+            }
+            if (!this.completionCandidates.isEmpty()) {
+                this.completionIndex = (this.completionIndex + 1) % this.completionCandidates.size();
+                String suggestion = this.completionCandidates.get(this.completionIndex);
+                this.blockId.setValue(suggestion);
+                this.blockId.setCursorPosition(suggestion.length());
+                this.status = "Autocomplete " + (this.completionIndex + 1) + "/"
+                        + this.completionCandidates.size() + ": " + suggestion;
+                return true;
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
     private void updateButtonLabels() {
         if (this.movementButton != null) {
             this.movementButton.setMessage(Component.literal("Movement: "
-                    + this.movementMode.name().toLowerCase(java.util.Locale.ROOT)));
+                    + this.movementMode.name().toLowerCase(Locale.ROOT)));
         }
         if (this.tickButton != null) {
             this.tickButton.setMessage(Component.literal("Ticks: "
-                    + this.tickMode.name().toLowerCase(java.util.Locale.ROOT)));
+                    + this.tickMode.name().toLowerCase(Locale.ROOT)));
         }
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
-        graphics.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFF);
-        graphics.centeredText(this.font, Component.literal("Block registry ID"), this.width / 2, 33, 0xA0A0A0);
-        graphics.centeredText(this.font, Component.literal(this.status), this.width / 2, 204, 0xFFFFFF);
-        graphics.centeredText(this.font, Component.literal("Movement overrides piston reaction; test carefully."),
-                this.width / 2, 218, 0xA0A0A0);
+        graphics.centeredText(this.font, this.title, this.width / 2, 13, 0xFFFFFF);
+        graphics.centeredText(this.font, Component.literal("Block registry ID"), this.width / 2, 28, 0xA0A0A0);
+
+        List<String> suggestions = blockSuggestions();
+        if (!suggestions.isEmpty()) {
+            String current = this.blockId.getValue().trim().toLowerCase(Locale.ROOT);
+            boolean cycling = this.completionCandidates.contains(current) && this.completionIndex >= 0;
+            String selectedSuggestion = cycling
+                    ? this.completionCandidates.get(this.completionIndex)
+                    : suggestions.get(0);
+            String hint = "Tab: " + selectedSuggestion;
+            if (suggestions.size() > 1) {
+                int currentIndex = cycling ? this.completionIndex + 1 : 1;
+                hint += " (" + currentIndex + "/" + suggestions.size() + "; Tab cycles)";
+            }
+            graphics.centeredText(this.font, Component.literal(hint), this.width / 2, 63, 0x80D8FF);
+        } else {
+            graphics.centeredText(this.font, Component.literal("Press Tab to complete a partial ID"),
+                    this.width / 2, 63, 0x808080);
+        }
+
+        graphics.centeredText(this.font, Component.literal(this.status), this.width / 2, 207, 0xFFFFFF);
+        graphics.centeredText(this.font, Component.literal("Load settings reads values; Apply + Save writes them."),
+                this.width / 2, 222, 0xA0A0A0);
     }
 
     @Override
