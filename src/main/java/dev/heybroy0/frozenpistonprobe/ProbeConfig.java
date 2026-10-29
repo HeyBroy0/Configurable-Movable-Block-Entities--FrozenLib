@@ -54,6 +54,22 @@ final class ProbeConfig {
         add("chest", Blocks.CHEST, "allow");
         add("trapped_chest", Blocks.TRAPPED_CHEST, "allow");
         add("dispenser", Blocks.DISPENSER, "allow");
+        add("crafter", Blocks.CRAFTER, "allow");
+        add("chiseled_bookshelf", Blocks.CHISELED_BOOKSHELF, "allow");
+        // Shelves are registered per wood type; there is no generic Blocks.SHELF field.
+        add("shelf", Blocks.OAK_SHELF, "allow");
+        add("shelf", Blocks.SPRUCE_SHELF, "allow");
+        add("shelf", Blocks.BIRCH_SHELF, "allow");
+        add("shelf", Blocks.JUNGLE_SHELF, "allow");
+        add("shelf", Blocks.ACACIA_SHELF, "allow");
+        add("shelf", Blocks.DARK_OAK_SHELF, "allow");
+        add("shelf", Blocks.MANGROVE_SHELF, "allow");
+        add("shelf", Blocks.CHERRY_SHELF, "allow");
+        add("shelf", Blocks.PALE_OAK_SHELF, "allow");
+        add("shelf", Blocks.BAMBOO_SHELF, "allow");
+        add("shelf", Blocks.CRIMSON_SHELF, "allow");
+        add("shelf", Blocks.WARPED_SHELF, "allow");
+        add("shelf", Blocks.POPLAR_SHELF, "allow");
     }
 
     private ProbeConfig() {

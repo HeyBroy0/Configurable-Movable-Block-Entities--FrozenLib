@@ -18,7 +18,7 @@ public final class FrozenPistonProbe implements ModInitializer {
 
         PistonEvents.DETERMINE_BLOCK_ENTITY_PUSH_RESULT.register(ProbeConfig::decidePush);
         PistonEvents.ON_MOVING_BLOCK_SET.register((level, pos, state, movingEntity) -> {
-            if (!ProbeConfig.isTracked(state.getBlock()) && !state.is(Blocks.GRINDSTONE)) {
+            if (!ProbeConfig.isTracked(state.getBlock()) && !isBaseline(state.getBlock())) {
                 return;
             }
 
@@ -26,8 +26,8 @@ public final class FrozenPistonProbe implements ModInitializer {
             String entityDescription = landedEntity == null
                     ? "none"
                     : landedEntity.getClass().getSimpleName();
-            String mode = state.is(Blocks.GRINDSTONE)
-                    ? "vanilla-baseline (not a block-entity event target)"
+            String mode = isBaseline(state.getBlock())
+                    ? "vanilla-baseline (scheduled-state comparison; not a block-entity event target)"
                     : ProbeConfig.modeName(state.getBlock());
 
             LOGGER.info(
@@ -40,6 +40,16 @@ public final class FrozenPistonProbe implements ModInitializer {
         });
 
         LOGGER.info("Frozen Piston Probe initialized. Config: {}", ProbeConfig.configPath());
-        LOGGER.info("Test the sculk blocks and lectern against chest/dispenser controls; grindstone is the vanilla baseline.");
+        LOGGER.info("Test transient block states via the scheduled-tick transfer, then compare the redstone lamp, target, observer, button, and pressure plate baselines.");
+    }
+
+    private static boolean isBaseline(net.minecraft.world.level.block.Block block) {
+        return block == Blocks.GRINDSTONE
+                || block == Blocks.REDSTONE_LAMP
+                || block == Blocks.TARGET
+                || block == Blocks.OBSERVER
+                || block == Blocks.STONE_BUTTON
+                || block == Blocks.STONE_PRESSURE_PLATE
+                || block == Blocks.REDSTONE_TORCH;
     }
 }
