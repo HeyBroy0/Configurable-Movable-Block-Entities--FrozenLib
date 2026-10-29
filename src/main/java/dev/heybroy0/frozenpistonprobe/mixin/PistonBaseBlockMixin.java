@@ -5,7 +5,9 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.heybroy0.frozenpistonprobe.PistonTickTransfer;
+import dev.heybroy0.frozenpistonprobe.ProbeConfig;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
@@ -27,7 +29,8 @@ public abstract class PistonBaseBlockMixin {
     )
     private List<BlockPos> frozenPistonProbe$captureTicksBeforeMutation(
             PistonStructureResolver resolver,
-            Operation<List<BlockPos>> original) {
+            Operation<List<BlockPos>> original,
+            @Local(argsOnly = true) Level level) {
         // PistonStructureResolverMixin has already expanded and validated configured multi-block
         // companions. Capture that final list before vanilla replaces any source positions.
         List<BlockPos> sourcePositions = original.call(resolver);

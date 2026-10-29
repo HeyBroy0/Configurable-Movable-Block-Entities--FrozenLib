@@ -2,6 +2,7 @@ package dev.heybroy0.frozenpistonprobe;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -130,8 +131,8 @@ final class ProbeConfigScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == InputConstants.KEY_TAB && this.blockId != null && this.blockId.isFocused()) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == InputConstants.KEY_TAB && this.blockId != null && this.blockId.isFocused()) {
             String current = this.blockId.getValue().trim().toLowerCase(Locale.ROOT);
             if (this.completionCandidates.isEmpty() || !this.completionCandidates.contains(current)) {
                 this.completionCandidates = findBlockSuggestions(current);
@@ -147,7 +148,7 @@ final class ProbeConfigScreen extends Screen {
                 return true;
             }
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     private void updateButtonLabels() {
