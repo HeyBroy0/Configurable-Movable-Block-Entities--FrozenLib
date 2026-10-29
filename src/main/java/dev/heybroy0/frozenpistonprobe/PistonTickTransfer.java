@@ -90,7 +90,10 @@ public final class PistonTickTransfer {
     /** Called while the original block state and its per-chunk tick entries are still present. */
     public static void captureSource(LevelChunk chunk, BlockPos pos, net.minecraft.world.level.block.state.BlockState oldState) {
         Level level = chunk.getLevel();
-        if (level.isClientSide() || oldState.isAir() || oldState.is(Blocks.MOVING_PISTON)) {
+        if (level.isClientSide()
+                || oldState.isAir()
+                || oldState.is(Blocks.MOVING_PISTON)
+                || oldState.is(Blocks.OBSERVER)) {
             return;
         }
 
