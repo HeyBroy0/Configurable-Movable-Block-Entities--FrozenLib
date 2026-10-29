@@ -3,7 +3,7 @@
   "id": "frozen_piston_probe",
   "version": "${version}",
   "name": "Frozen Piston Probe",
-  "description": "A small test mod for evaluating FrozenLib piston block-entity movement and lifecycle handling.",
+  "description": "An experimental test mod for configurable piston reactions, scheduled-tick policies, and FrozenLib block-entity movement.",
   "authors": [
     "HeyBroy0"
   ],
@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "dev.heybroy0.frozenpistonprobe.FrozenPistonProbe"
+    ],
+    "client": [
+      "dev.heybroy0.frozenpistonprobe.FrozenPistonProbeClient"
     ]
   },
   "depends": {

@@ -37,7 +37,7 @@ These blocks do not use the block-entity push policy. They are included to compa
 
 ## How the prototype is wired
 
-- Uses `PistonEvents.DETERMINE_BLOCK_ENTITY_PUSH_RESULT` to apply each configured block's movement policy.
+- Applies configured piston reactions through `BlockBehaviour.BlockStateBase.getPistonPushReaction`, so `PistonBaseBlock.isPushable` and `PistonStructureResolver` see the same reaction. It also uses `PistonEvents.DETERMINE_BLOCK_ENTITY_PUSH_RESULT` to avoid FrozenLib's block-entity veto when a configured block is movable or breakable.
 - Uses `PistonEvents.ON_MOVING_BLOCK_SET` to log the block, destination position, and whether a block entity is present when FrozenLib reports its moving-block set path.
 - Adds the test blocks to `frozenlib:has_pushable_block_entity`. This tag is important: FrozenLib's piston mixin uses it when deciding whether to skip normal block-entity removal side effects, and its fallback pushability logic also consults the tag. The tag is merged with `replace: false` so other mods' entries are not intentionally replaced.
 - Adds a generic landing-path compatibility Mixin. If FrozenLib's moving piston has saved carried block-entity NBT, the probe ORs `PistonBaseBlock.UPDATE_SKIP_BLOCK_ENTITY_SIDEEFFECTS` into the landing `Level.setBlock` flags. FrozenLib remains responsible for restoring the block entity from its saved NBT and firing `ON_MOVING_BLOCK_SET`.
@@ -55,33 +55,41 @@ The jar is written to `build/libs/`. Install the probe, Fabric API, and FrozenLi
 
 FrozenLib is resolved from the Modrinth Maven repository using the published Minecraft 26.3 Fabric version ID `lcUrAjbb` (`3.0-mc26.3-fabric`): `maven.modrinth:9KawNmQc:lcUrAjbb`. This uses the version published on Modrinth rather than assuming the separately listed CurseForge version string is also present on Modrinth. See https://modrinth.com/mod/frozenlib/version/lcUrAjbb and https://github.com/FrozenBlock/FrozenLib.
 
-## Configuration
+## Configuration and in-game test screen
 
-On first launch, the mod creates `config/frozen-piston-probe.properties`.
+Press **P** in a world to open the crude policy editor. The key can be rebound under **Options → Controls → Key Binds → Frozen Piston Probe**. Enter a registry ID such as `minecraft:observer`, `minecraft:obsidian`, or `minecraft:sculk_sensor`; choose **Load block**, cycle movement and scheduled-tick policy, then choose **Apply + Save**. Changes apply immediately in the current game process and are written to `config/frozen-piston-probe.properties`. The editor is intended for single-player testing; it does not send changes to a remote server.
 
-Each block-entity target accepts one mode:
+The UI intentionally accepts any registered block ID so you can test special cases without rebuilding. Use a disposable world: forcing unusual blocks to move or break can produce destructive or unsupported states.
 
-- `allow` — return FrozenLib `SUCCESS` for this block entity.
-- `deny` — return FrozenLib `FAIL`; the piston should refuse to move the block.
-- `pass` — return `PASS` and allow FrozenLib's tag / other callbacks to decide. Because the probe adds its targets to the FrozenLib tag, this mode generally exercises the tag fallback rather than forcing a denial.
-
-Example:
+Example configuration:
 
 ```properties
-sculk_sensor=allow
-calibrated_sculk_sensor=allow
-sculk_shrieker=allow
-sculk_catalyst=allow
-lectern=allow
-chest=allow
-trapped_chest=allow
-dispenser=allow
-crafter=allow
-chiseled_bookshelf=allow
-shelf=allow
+movement.minecraft\:observer=vanilla
+tick.minecraft\:observer=vanilla
+movement.minecraft\:obsidian=breakable
+tick.minecraft\:sculk_sensor=transfer
 ```
 
-Changes require a game/server restart. Invalid values are logged and replaced by the defaults.
+The backslash before `:` is normal escaping emitted by Java's `Properties` writer. In the GUI, enter the ordinary ID without a backslash.
+
+### Movement policy
+
+- `vanilla` — use the block's original piston reaction.
+- `movable` — override the reaction to `PUSH_PULL`, allowing ordinary push/pull handling where vanilla's other piston checks allow it.
+- `breakable` — override the reaction to `POPPED`, making the resolver treat the block as one to destroy on a push.
+- `immovable` — override the reaction to `IMMOVEABLE`.
+
+The reaction override applies to the block state's piston-reaction method, so the pushability check and structure resolver use a consistent value. For block entities, the FrozenLib callback is also configured to allow `movable` and `breakable`, deny `immovable`, and defer `vanilla` to FrozenLib. The `movable` and `breakable` modes also bypass the vanilla `destroySpeed == -1` veto inside the piston pushability check, so they can deliberately override blocks normally considered unbreakable. World/build-height/border checks, piston limits, and extended-piston restrictions remain in force. Blocks with complex block entities can also have additional lifecycle requirements.
+
+Existing short keys such as `sculk_sensor=allow` are still accepted and normalized to the new names (`movable`, `immovable`, and `vanilla`). New per-block entries use registry identifiers such as `movement.minecraft\:observer` and take precedence over legacy short keys.
+
+### Scheduled-tick policy
+
+- `vanilla` — do not remove or transfer source ticks. Vanilla leaves the appointment at the original position; the normal block-type check determines whether it still has an effect.
+- `transfer` — remove matching block/fluid ticks from the source queue and carry them to the destination, preserving absolute trigger time, priority, and sub-tick order.
+- `duplicate` — retain the source tick and also queue a copy at the destination on landing. The scheduler deduplicates by tick type and position, so it cannot create two independent appointments for the same type at one position.
+
+Unless explicitly configured, scheduled ticks use `transfer`, except observers default to `vanilla` because excluding observers from tick transfer restored the user's redstone test machine. The UI can override that default. Tick policy applies to matching block ticks and the source block's current fluid type when one is present.
 
 ## Recommended test sequence
 
@@ -89,7 +97,7 @@ Changes require a game/server restart. Invalid values are logged and replaced by
 2. Test each block with `allow`, in both piston extension and retraction. Put a named book on the lectern, items in the chest/dispenser, and activate each sculk block before moving it where possible.
 3. For sensors, test normal and calibrated activation before and after movement. Confirm it can hear later vibrations, deactivate correctly, and continue producing expected redstone output.
 4. For the shrieker, test before and after movement. The probe now adds the block-entity-side-effect skip flag only to the landing `setBlock` operation when FrozenLib's moving piston contains saved carried-block-entity NBT. Look for the debug message `Preserving carried block entity during piston landing`. If the crash is gone, still verify shrieker activation and vibration behavior; avoiding the exception does not prove the whole lifecycle is correct.
-5. Restart with one target at `deny` to confirm policy enforcement. Then set it to `pass` to inspect the FrozenLib tag fallback path.
+5. In the policy editor, compare `movable`, `breakable`, `immovable`, and `vanilla` on a safe test block. Confirm both push and pull behavior, and check that breakable blocks are destroyed only when vanilla piston rules permit it.
 6. Test the chest, dispenser, crafter, chiseled bookshelf, and the wooden shelf variants as block-entity controls. Move the lamp, target, observer, button, pressure plate, and torch as vanilla scheduled-state baselines.
 7. Repeat with destination positions across a chunk boundary, then save/reload while a block is moving if possible. Test single-block moves separately from slime/honey-chain pushes.
 
@@ -106,7 +114,7 @@ The reported crash occurred before FrozenLib's `ON_MOVING_BLOCK_SET` callback: M
 - This is a test harness, not a release-ready replacement mod.
 - It uses the FrozenLib API and tag rather than copying FrozenLib implementation code.
 - Grindstone is not in the configurable list because it has no block entity and does not reach this event.
-- The prototype has not been compiled or tested in Minecraft in the environment where it was generated. The local environment lacks JDK 25 and Gradle; CI is included to compile it in a suitable environment.
+- This 0.1.8 policy/UI revision has not been compiled or tested in Minecraft in this environment. The available runtime has JDK 21 and no Gradle executable; build it with JDK 25 and Gradle 9.8.1, then test each policy in a disposable world before relying on it.
 - FrozenLib is GPL-3.0-only. Review licensing before publishing or bundling this prototype.
 
 ### Minecraft 26.3 compatibility note

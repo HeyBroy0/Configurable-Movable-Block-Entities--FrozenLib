@@ -90,20 +90,29 @@ public final class PistonTickTransfer {
     /** Called while the original block state and its per-chunk tick entries are still present. */
     public static void captureSource(LevelChunk chunk, BlockPos pos, net.minecraft.world.level.block.state.BlockState oldState) {
         Level level = chunk.getLevel();
-        if (level.isClientSide()
-                || oldState.isAir()
-                || oldState.is(Blocks.MOVING_PISTON)
-                || oldState.is(Blocks.OBSERVER)) {
+        if (level.isClientSide() || oldState.isAir() || oldState.is(Blocks.MOVING_PISTON)) {
             return;
         }
 
-        List<ScheduledTick<Block>> matchingBlockTicks = extractMatching(
-                chunk.getBlockTicks(), pos, oldState.getBlock());
+        ProbeConfig.TickMode tickMode = ProbeConfig.tickMode(oldState.getBlock());
+        if (tickMode == ProbeConfig.TickMode.VANILLA) {
+            // Vanilla leaves the appointment at the source coordinate. It is not retargeted
+            // when the block moves, and the usual type check decides whether it does anything.
+            return;
+        }
+        boolean removeSourceTicks = tickMode == ProbeConfig.TickMode.TRANSFER;
+        List<ScheduledTick<Block>> matchingBlockTicks = matchingTicks(
+                chunk.getBlockTicks(), pos, oldState.getBlock(), removeSourceTicks);
 
         Fluid sourceFluid = oldState.getFluidState().getType();
         List<ScheduledTick<Fluid>> matchingFluidTicks = sourceFluid == Fluids.EMPTY
                 ? List.of()
-                : extractMatching(chunk.getFluidTicks(), pos, sourceFluid);
+                : matchingTicks(chunk.getFluidTicks(), pos, sourceFluid, removeSourceTicks);
+        if (!matchingBlockTicks.isEmpty() || !matchingFluidTicks.isEmpty()) {
+            FrozenPistonProbe.LOGGER.info("Scheduled-tick policy at {} for {}: mode={}, block={}, fluid={}",
+                    pos, BuiltInRegistries.BLOCK.getKey(oldState.getBlock()), tickMode,
+                    matchingBlockTicks.size(), matchingFluidTicks.size());
+        }
 
         List<BlockTick> blockRecords = matchingBlockTicks.stream()
                 .map(tick -> new BlockTick(tick.type(), tick.triggerTick(), tick.priority(), tick.subTickOrder()))
@@ -130,8 +139,8 @@ public final class PistonTickTransfer {
         }
     }
 
-    private static <T> List<ScheduledTick<T>> extractMatching(
-            TickContainerAccess<T> tickAccess, BlockPos pos, T expectedType) {
+    private static <T> List<ScheduledTick<T>> matchingTicks(
+            TickContainerAccess<T> tickAccess, BlockPos pos, T expectedType, boolean removeFromSource) {
         // Fast path: avoid scanning every tick in a chunk for the common no-pending-tick case.
         if (!tickAccess.hasScheduledTick(pos, expectedType)) {
             return List.of();
@@ -150,7 +159,7 @@ public final class PistonTickTransfer {
                 .filter(tick -> tick.pos().equals(pos) && tick.type() == expectedType)
                 .toList();
 
-        if (!matches.isEmpty()) {
+        if (removeFromSource && !matches.isEmpty()) {
             // removeIf also removes these entries from LevelChunkTicks' deduplication set.
             // LevelTicks' cached head is corrected by its normal queue-index reconciliation.
             ticks.removeIf(tick -> tick.pos().equals(pos) && tick.type() == expectedType);
