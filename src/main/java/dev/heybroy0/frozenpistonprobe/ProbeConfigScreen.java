@@ -1,7 +1,6 @@
 package dev.heybroy0.frozenpistonprobe;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -10,6 +9,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
+import java.awt.Desktop;
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
@@ -91,12 +92,17 @@ final class ProbeConfigScreen extends Screen {
     }
 
     private void openConfigFile() {
+        var configPath = ProbeConfig.configPath();
         try {
-            Util.getPlatform().openUri(ProbeConfig.configPath().toUri());
+            if (!Desktop.isDesktopSupported()) {
+                this.status = "Desktop opening unavailable. Config: " + configPath;
+                return;
+            }
+            Desktop.getDesktop().open(configPath.toFile());
             this.status = "Opened config file in your default editor.";
-        } catch (RuntimeException exception) {
-            FrozenPistonProbe.LOGGER.warn("Could not open config file {}", ProbeConfig.configPath(), exception);
-            this.status = "Could not open file. Config path is in latest.log.";
+        } catch (IOException | RuntimeException exception) {
+            FrozenPistonProbe.LOGGER.warn("Could not open config file {}", configPath, exception);
+            this.status = "Could not open file: " + configPath;
         }
     }
 
