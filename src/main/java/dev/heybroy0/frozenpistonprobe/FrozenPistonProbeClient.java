@@ -23,7 +23,7 @@ public final class FrozenPistonProbeClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openConfig.consumeClick()) {
-                if (client.player != null && client.screen == null) {
+                if (client.player != null && client.gui.screen() == null) {
                     client.gui.setScreen(new ProbeConfigScreen(null));
                 }
             }
