@@ -12,8 +12,11 @@ import net.minecraft.resources.Identifier;
 
 import java.awt.Desktop;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /** Minimal, intentionally crude UI for live testing of per-block policies. */
 final class ProbeConfigScreen extends Screen {
@@ -105,22 +108,97 @@ final class ProbeConfigScreen extends Screen {
     }
 
     private void openConfigFile() {
-        var configPath = ProbeConfig.configPath();
+        Path configPath = ProbeConfig.configPath().toAbsolutePath().normalize();
+        Path configDirectory = configPath.getParent();
         try {
-            java.nio.file.Files.createDirectories(configPath.getParent());
-            if (!java.nio.file.Files.exists(configPath)) {
-                ProbeConfig.resetToDefaults();
+            if (configDirectory == null) {
+                throw new IOException("The config file has no parent directory: " + configPath);
             }
-            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-                this.status = "Folder opening unavailable. Config folder: " + configPath.getParent();
+
+            Files.createDirectories(configDirectory);
+            if (!Files.isRegularFile(configPath) && !ProbeConfig.resetToDefaults()) {
+                throw new IOException("Could not create the config file: " + configPath);
+            }
+            if (!Files.isRegularFile(configPath)) {
+                throw new IOException("Config file was not created: " + configPath);
+            }
+
+            openWithDefaultApplication(configPath);
+            this.status = "Requested editor to open: " + configPath;
+            FrozenPistonProbe.LOGGER.info("Requested default application to open config file: {}", configPath);
+        } catch (IOException | RuntimeException exception) {
+            FrozenPistonProbe.LOGGER.warn("Could not open config file {}", configPath, exception);
+            this.status = "Could not open config file; see latest.log. Path: " + configPath;
+        }
+    }
+
+    /** Opens a file with the operating system's default application. */
+    private static void openWithDefaultApplication(Path configPath) throws IOException {
+        // Prefer Java's Desktop API when the runtime exposes it.
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                Desktop.getDesktop().open(configPath.toFile());
                 return;
             }
-            // Open the containing folder rather than asking the OS to open a .properties file.
-            Desktop.getDesktop().open(configPath.getParent().toFile());
-            this.status = "Opened config folder: " + configPath.getParent();
-        } catch (IOException | RuntimeException exception) {
-            FrozenPistonProbe.LOGGER.warn("Could not open config folder for {}", configPath, exception);
-            this.status = "Could not open folder: " + configPath.getParent();
+        } catch (IOException | RuntimeException desktopFailure) {
+            // Continue with platform-specific launchers below; these often work in game runtimes
+            // where AWT Desktop is unavailable or throws due to the launcher environment.
+        }
+
+        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        IOException lastFailure = null;
+        if (osName.startsWith("windows")) {
+            // rundll32 delegates the file URI to the Windows shell's registered file handler.
+            try {
+                startDefaultApplication(List.of("rundll32.exe", "url.dll,FileProtocolHandler", configPath.toUri().toString()));
+                return;
+            } catch (IOException exception) {
+                lastFailure = exception;
+            }
+        } else if (osName.startsWith("mac") || osName.contains("darwin")) {
+            try {
+                startDefaultApplication(List.of("open", configPath.toString()));
+                return;
+            } catch (IOException exception) {
+                lastFailure = exception;
+            }
+        } else {
+            for (List<String> command : List.of(
+                    List.of("xdg-open", configPath.toString()),
+                    List.of("gio", "open", configPath.toString()))) {
+                try {
+                    startDefaultApplication(command);
+                    return;
+                } catch (IOException exception) {
+                    lastFailure = exception;
+                }
+            }
+        }
+
+        if (lastFailure != null) throw lastFailure;
+        throw new IOException("No supported default-application launcher was found for " + osName);
+    }
+
+    private static void startDefaultApplication(List<String> command) throws IOException {
+        Process process;
+        try {
+            process = new ProcessBuilder(command)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+        } catch (IOException exception) {
+            throw new IOException("Could not start default-application command: " + command.get(0), exception);
+        }
+
+        try {
+            // These launchers normally hand off to the desktop application and then exit.
+            if (process.waitFor(1200, TimeUnit.MILLISECONDS) && process.exitValue() != 0) {
+                throw new IOException("Default-application command exited with code "
+                        + process.exitValue() + ": " + command.get(0));
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while launching default application: " + command.get(0), exception);
         }
     }
 
