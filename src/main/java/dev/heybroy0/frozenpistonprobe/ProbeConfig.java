@@ -121,16 +121,7 @@ public final class ProbeConfig {
     }
 
     public static synchronized void load() {
-        Properties bundledDefaults = new Properties();
-        try (Reader reader = new java.io.InputStreamReader(
-                java.util.Objects.requireNonNull(
-                        ProbeConfig.class.getResourceAsStream("/frozen-piston-probe-defaults.properties"),
-                        "Missing bundled default config"),
-                java.nio.charset.StandardCharsets.UTF_8)) {
-            bundledDefaults.load(reader);
-        } catch (IOException | NullPointerException exception) {
-            FrozenPistonProbe.LOGGER.error("Could not read bundled defaults; starting with vanilla movement policies", exception);
-        }
+        Properties bundledDefaults = readBundledDefaults();
 
         Properties fromDisk = new Properties();
         try {
@@ -183,6 +174,20 @@ public final class ProbeConfig {
         }
 
         saveToDisk();
+    }
+
+    private static Properties readBundledDefaults() {
+        Properties bundledDefaults = new Properties();
+        try (Reader reader = new java.io.InputStreamReader(
+                java.util.Objects.requireNonNull(
+                        ProbeConfig.class.getResourceAsStream("/frozen-piston-probe-defaults.properties"),
+                        "Missing bundled default config"),
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            bundledDefaults.load(reader);
+        } catch (IOException | NullPointerException exception) {
+            FrozenPistonProbe.LOGGER.error("Could not read bundled defaults; starting with vanilla movement policies", exception);
+        }
+        return bundledDefaults;
     }
 
     private static void copyValidatedDefaults(Properties defaults) {
@@ -324,6 +329,7 @@ public final class ProbeConfig {
     }
 
     public static TickMode tickMode(Block block) {
+        ensureConfigFileExists();
         String configured = ACTIVE.getProperty(tickKey(block));
         if (configured != null) {
             try {
@@ -348,6 +354,23 @@ public final class ProbeConfig {
         return findBlock(rawId) != null;
     }
 
+    /** Restore the bundled default policies and write a fresh config file. */
+    public static synchronized boolean resetToDefaults() {
+        Properties bundledDefaults = readBundledDefaults();
+        ACTIVE.clear();
+        copyValidatedDefaults(bundledDefaults);
+        FrozenPistonProbe.LOGGER.info("Reset Frozen Piston Probe policies to bundled defaults");
+        return saveToDisk();
+    }
+
+    /** If the config is deleted while the game is running, restore defaults on the next lookup. */
+    private static synchronized void ensureConfigFileExists() {
+        if (!Files.exists(CONFIG_PATH)) {
+            FrozenPistonProbe.LOGGER.warn("Config {} is missing; regenerating it with bundled defaults", CONFIG_PATH);
+            resetToDefaults();
+        }
+    }
+
     /** Applies both values immediately, then persists them. A false return means disk save failed. */
     public static synchronized boolean setPolicies(String rawId, MovementMode movementMode, TickMode tickMode) {
         Block block = requireBlock(rawId);
@@ -365,6 +388,7 @@ public final class ProbeConfig {
     }
 
     private static MovementMode movementMode(Block block) {
+        ensureConfigFileExists();
         String configured = ACTIVE.getProperty(movementKey(block));
         if (configured == null) {
             return MovementMode.VANILLA;

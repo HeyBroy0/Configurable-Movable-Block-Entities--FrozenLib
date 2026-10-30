@@ -28,6 +28,7 @@ final class ProbeConfigScreen extends Screen {
     private int panelWidth;
     private List<String> completionCandidates = List.of();
     private int completionIndex = -1;
+    private static String lastTypedBlockId = "";
 
     ProbeConfigScreen(Screen parent) {
         super(Component.literal("Frozen Piston Probe"));
@@ -42,7 +43,12 @@ final class ProbeConfigScreen extends Screen {
         this.blockId = this.addRenderableWidget(new EditBox(
                 this.font, this.panelLeft, 41, this.panelWidth, 20, Component.literal("Block ID")));
         this.blockId.setMaxLength(256);
-        this.blockId.setValue("minecraft:observer");
+        this.blockId.setValue(lastTypedBlockId);
+        this.blockId.setResponder(value -> {
+            lastTypedBlockId = value;
+            this.completionCandidates = findBlockSuggestions(value);
+            this.completionIndex = -1;
+        });
 
         this.addRenderableWidget(Button.builder(Component.literal("Load settings"), button -> loadBlock())
                 .bounds(this.panelLeft, 73, this.panelWidth, 18).build());
@@ -61,8 +67,10 @@ final class ProbeConfigScreen extends Screen {
                 .bounds(this.panelLeft, 139, this.panelWidth, 18).build());
         this.addRenderableWidget(Button.builder(Component.literal("Open config file"), button -> openConfigFile())
                 .bounds(this.panelLeft, 161, this.panelWidth, 18).build());
-        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
+        this.addRenderableWidget(Button.builder(Component.literal("Reset defaults"), button -> resetDefaults())
                 .bounds(this.panelLeft, 183, this.panelWidth, 18).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
+                .bounds(this.panelLeft, 205, this.panelWidth, 18).build());
 
         loadBlock();
         this.setInitialFocus(this.blockId);
@@ -70,6 +78,10 @@ final class ProbeConfigScreen extends Screen {
 
     private void loadBlock() {
         String rawId = this.blockId.getValue().trim();
+        if (rawId.isEmpty()) {
+            this.status = "Type a block ID, then load its settings.";
+            return;
+        }
         if (!ProbeConfig.isValidBlockId(rawId)) {
             this.status = "Unknown block ID: " + rawId;
             return;
@@ -95,16 +107,33 @@ final class ProbeConfigScreen extends Screen {
     private void openConfigFile() {
         var configPath = ProbeConfig.configPath();
         try {
-            if (!Desktop.isDesktopSupported()) {
-                this.status = "Desktop opening unavailable. Config: " + configPath;
+            java.nio.file.Files.createDirectories(configPath.getParent());
+            if (!java.nio.file.Files.exists(configPath)) {
+                ProbeConfig.resetToDefaults();
+            }
+            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                this.status = "Folder opening unavailable. Config folder: " + configPath.getParent();
                 return;
             }
-            Desktop.getDesktop().open(configPath.toFile());
-            this.status = "Opened config file in your default editor.";
+            // Open the containing folder rather than asking the OS to open a .properties file.
+            Desktop.getDesktop().open(configPath.getParent().toFile());
+            this.status = "Opened config folder: " + configPath.getParent();
         } catch (IOException | RuntimeException exception) {
-            FrozenPistonProbe.LOGGER.warn("Could not open config file {}", configPath, exception);
-            this.status = "Could not open file: " + configPath;
+            FrozenPistonProbe.LOGGER.warn("Could not open config folder for {}", configPath, exception);
+            this.status = "Could not open folder: " + configPath.getParent();
         }
+    }
+
+    private void resetDefaults() {
+        boolean saved = ProbeConfig.resetToDefaults();
+        this.movementMode = ProbeConfig.MovementMode.VANILLA;
+        this.tickMode = ProbeConfig.TickMode.TRANSFER;
+        if (this.blockId != null && ProbeConfig.isValidBlockId(this.blockId.getValue().trim())) {
+            loadBlock();
+        } else {
+            updateButtonLabels();
+        }
+        this.status = saved ? "Reset defaults and saved config." : "Reset defaults in memory; save failed.";
     }
 
     private List<String> findBlockSuggestions(String value) {
@@ -132,6 +161,24 @@ final class ProbeConfigScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (this.blockId != null && this.blockId.isFocused()
+                && (event.key() == InputConstants.KEY_UP || event.key() == InputConstants.KEY_DOWN
+                || event.key() == InputConstants.KEY_ENTER)) {
+            if (this.completionCandidates.isEmpty()) {
+                this.completionCandidates = findBlockSuggestions(this.blockId.getValue());
+            }
+            if (!this.completionCandidates.isEmpty()) {
+                if (event.key() == InputConstants.KEY_ENTER) {
+                    int selected = this.completionIndex < 0 ? 0 : this.completionIndex;
+                    applySuggestion(this.completionCandidates.get(selected));
+                } else {
+                    int step = event.key() == InputConstants.KEY_DOWN ? 1 : -1;
+                    int start = this.completionIndex < 0 ? (step > 0 ? -1 : 0) : this.completionIndex;
+                    this.completionIndex = Math.floorMod(start + step, this.completionCandidates.size());
+                }
+                return true;
+            }
+        }
         if (event.key() == InputConstants.KEY_TAB && this.blockId != null && this.blockId.isFocused()) {
             String current = this.blockId.getValue().trim().toLowerCase(Locale.ROOT);
             if (this.completionCandidates.isEmpty() || !this.completionCandidates.contains(current)) {
@@ -140,15 +187,24 @@ final class ProbeConfigScreen extends Screen {
             }
             if (!this.completionCandidates.isEmpty()) {
                 this.completionIndex = (this.completionIndex + 1) % this.completionCandidates.size();
-                String suggestion = this.completionCandidates.get(this.completionIndex);
-                this.blockId.setValue(suggestion);
-                this.blockId.setCursorPosition(suggestion.length());
-                this.status = "Autocomplete " + (this.completionIndex + 1) + "/"
-                        + this.completionCandidates.size() + ": " + suggestion;
+                int selectedIndex = this.completionIndex;
+                int candidateCount = this.completionCandidates.size();
+                String suggestion = this.completionCandidates.get(selectedIndex);
+                applySuggestion(suggestion);
+                this.status = "Autocomplete " + (selectedIndex + 1) + "/"
+                        + candidateCount + ": " + suggestion;
                 return true;
             }
         }
         return super.keyPressed(event);
+    }
+
+    private void applySuggestion(String suggestion) {
+        this.blockId.setValue(suggestion);
+        this.blockId.setCursorPosition(suggestion.length());
+        this.completionCandidates = findBlockSuggestions(suggestion);
+        this.completionIndex = -1;
+        this.status = "Selected " + suggestion;
     }
 
     private void updateButtonLabels() {
@@ -169,26 +225,30 @@ final class ProbeConfigScreen extends Screen {
         graphics.centeredText(this.font, Component.literal("Block registry ID"), this.width / 2, 28, 0xA0A0A0);
 
         List<String> suggestions = blockSuggestions();
-        if (!suggestions.isEmpty()) {
-            String current = this.blockId.getValue().trim().toLowerCase(Locale.ROOT);
-            boolean cycling = this.completionCandidates.contains(current) && this.completionIndex >= 0;
-            String selectedSuggestion = cycling
-                    ? this.completionCandidates.get(this.completionIndex)
-                    : suggestions.get(0);
-            String hint = "Tab: " + selectedSuggestion;
-            if (suggestions.size() > 1) {
-                int currentIndex = cycling ? this.completionIndex + 1 : 1;
-                hint += " (" + currentIndex + "/" + suggestions.size() + "; Tab cycles)";
+        if (this.blockId != null && this.blockId.isFocused() && !suggestions.isEmpty()) {
+            int rowHeight = 14;
+            int dropdownTop = 62;
+            int rows = Math.min(5, suggestions.size());
+            int dropdownBottom = dropdownTop + rows * rowHeight + 2;
+            graphics.fill(this.panelLeft, dropdownTop, this.panelLeft + this.panelWidth, dropdownBottom, 0xF0101010);
+            graphics.fill(this.panelLeft, dropdownTop, this.panelLeft + this.panelWidth, dropdownTop + 1, 0xFF808080);
+            for (int i = 0; i < rows; i++) {
+                int rowTop = dropdownTop + 2 + i * rowHeight;
+                if (i == this.completionIndex) {
+                    graphics.fill(this.panelLeft + 1, rowTop, this.panelLeft + this.panelWidth - 1,
+                            rowTop + rowHeight, 0xFF305080);
+                }
+                graphics.centeredText(this.font, Component.literal(suggestions.get(i)),
+                        this.width / 2, rowTop + 3, i == this.completionIndex ? 0xFFFFFFFF : 0xFFD0D0D0);
             }
-            graphics.centeredText(this.font, Component.literal(hint), this.width / 2, 63, 0x80D8FF);
         } else {
-            graphics.centeredText(this.font, Component.literal("Press Tab to complete a partial ID"),
+            graphics.centeredText(this.font, Component.literal("Type a block ID; Tab or arrows show suggestions"),
                     this.width / 2, 63, 0x808080);
         }
 
-        graphics.centeredText(this.font, Component.literal(this.status), this.width / 2, 207, 0xFFFFFF);
-        graphics.centeredText(this.font, Component.literal("Load settings reads values; Apply + Save writes them."),
-                this.width / 2, 222, 0xA0A0A0);
+        graphics.centeredText(this.font, Component.literal(this.status), this.width / 2, 232, 0xFFFFFF);
+        graphics.centeredText(this.font, Component.literal("Load reads settings; Reset restores bundled defaults."),
+                this.width / 2, 247, 0xA0A0A0);
     }
 
     @Override
