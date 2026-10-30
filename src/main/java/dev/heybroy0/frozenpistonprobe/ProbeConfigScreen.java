@@ -163,12 +163,14 @@ final class ProbeConfigScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         if (this.blockId != null && this.blockId.isFocused()
                 && (event.key() == InputConstants.KEY_UP || event.key() == InputConstants.KEY_DOWN
-                || event.key() == InputConstants.KEY_ENTER)) {
+                || event.key() == InputConstants.KEY_RETURN
+                || event.key() == InputConstants.KEY_NUMPADENTER)) {
             if (this.completionCandidates.isEmpty()) {
                 this.completionCandidates = findBlockSuggestions(this.blockId.getValue());
             }
             if (!this.completionCandidates.isEmpty()) {
-                if (event.key() == InputConstants.KEY_ENTER) {
+                if (event.key() == InputConstants.KEY_RETURN
+                        || event.key() == InputConstants.KEY_NUMPADENTER) {
                     int selected = this.completionIndex < 0 ? 0 : this.completionIndex;
                     applySuggestion(this.completionCandidates.get(selected));
                 } else {
