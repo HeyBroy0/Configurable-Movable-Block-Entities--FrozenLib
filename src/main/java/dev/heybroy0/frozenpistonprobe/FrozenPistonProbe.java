@@ -17,6 +17,8 @@ public final class FrozenPistonProbe implements ModInitializer {
         ProbeConfig.load();
 
         PistonEvents.DETERMINE_BLOCK_ENTITY_PUSH_RESULT.register(ProbeConfig::decidePush);
+        MultiBlockStickiness.register();
+
         PistonEvents.ON_MOVING_BLOCK_SET.register((level, pos, state, movingEntity) -> {
             if (!ProbeConfig.isTracked(state.getBlock()) && !isBaseline(state.getBlock())) {
                 return;
