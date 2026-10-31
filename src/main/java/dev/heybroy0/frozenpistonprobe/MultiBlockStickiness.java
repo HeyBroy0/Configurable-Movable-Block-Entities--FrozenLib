@@ -3,49 +3,51 @@ package dev.heybroy0.frozenpistonprobe;
 import net.frozenblock.lib.block.api.piston.PistonEvents;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 /**
- * Integrates movable door/bed companion handling with FrozenLib's normal
- * sticky-block resolver hooks. This deliberately does not manually append
- * positions to PistonStructureResolver.toPush.
+ * Integrates configured movable multiblocks with FrozenLib's piston
+ * stickiness events.
  *
- * Stage 1 only addresses resolver membership; landing/update-order fixes are
- * intentionally deferred to a later stage.
+ * Movable bed/door-style states can stick to slime and honey blocks, and
+ * matching halves can stick to each other. Other blocks retain their normal
+ * FrozenLib/vanilla behavior.
  */
 public final class MultiBlockStickiness {
-    private MultiBlockStickiness() {}
+    private MultiBlockStickiness() {
+    }
 
     public static void register() {
-        PistonEvents.DETERMINE_BLOCK_STICKINESS.register((state, direction) -> {
-            if (isConfiguredMovableCompanionType(state)) {
-                return PistonEvents.StickyResult.SUCCESS;
-            }
-            return PistonEvents.StickyResult.PASS;
-        });
+        PistonEvents.DETERMINE_BLOCK_STICKINESS.register((state, direction) ->
+                isConfiguredMovableMultiBlock(state)
+                        ? PistonEvents.StickyResult.SUCCESS
+                        : PistonEvents.StickyResult.PASS
+        );
 
         PistonEvents.TRY_STICK_BLOCKS_TOGETHER.register((previous, next, direction) -> {
-            boolean previousCandidate = isConfiguredMovableCompanionType(previous);
-            boolean nextCandidate = isConfiguredMovableCompanionType(next);
+            boolean previousIsMultiBlock = isConfiguredMovableMultiBlock(previous);
+            boolean nextIsMultiBlock = isConfiguredMovableMultiBlock(next);
 
-            // If neither state is one of our candidates, leave all other mods
-            // and vanilla sticky behavior untouched.
-            if (!previousCandidate && !nextCandidate) {
+            if (!previousIsMultiBlock && !nextIsMultiBlock) {
                 return PistonEvents.StickTogetherResult.PASS;
             }
 
-            // A candidate only sticks to its exact structural companion. This
-            // prevents temporarily treating doors/beds as slime-like blocks.
+            if ((previousIsMultiBlock && isSlimeOrHoney(next))
+                    || (nextIsMultiBlock && isSlimeOrHoney(previous))) {
+                return PistonEvents.StickTogetherResult.SUCCESS;
+            }
+
             return areCompanions(previous, next, direction)
                     ? PistonEvents.StickTogetherResult.SUCCESS
                     : PistonEvents.StickTogetherResult.FAIL;
         });
     }
 
-    private static boolean isConfiguredMovableCompanionType(BlockState state) {
+    private static boolean isConfiguredMovableMultiBlock(BlockState state) {
         if (!state.hasProperty(BlockStateProperties.BED_PART)
                 && !state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
             return false;
@@ -53,6 +55,10 @@ public final class MultiBlockStickiness {
 
         String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         return ProbeConfig.movementModeForId(id) == ProbeConfig.MovementMode.MOVABLE;
+    }
+
+    private static boolean isSlimeOrHoney(BlockState state) {
+        return state.is(Blocks.SLIME_BLOCK) || state.is(Blocks.HONEY_BLOCK);
     }
 
     private static boolean areCompanions(
@@ -83,8 +89,11 @@ public final class MultiBlockStickiness {
             }
 
             Direction facing = first.getValue(BlockStateProperties.HORIZONTAL_FACING);
-            Direction expected = firstPart == BedPart.FOOT ? facing : facing.getOpposite();
-            return secondPart != firstPart && directionFromFirstToSecond == expected;
+            Direction expected = firstPart == BedPart.FOOT
+                    ? facing
+                    : facing.getOpposite();
+
+            return directionFromFirstToSecond == expected;
         }
 
         if (first.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
